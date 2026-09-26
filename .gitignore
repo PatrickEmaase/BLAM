@@ -28,7 +28,7 @@ results/
 output/
 outputs/
 runs/
-logs/
+ogs/
 
 # Model checkpoints
 checkpoints/
@@ -48,3 +48,4 @@ datasets/
 # Temporary files
 tmp/
 temp/
+data/cifar-10-batches-py/
