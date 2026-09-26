@@ -1,52 +1,20 @@
-# Virtual environments
-matt2026/
-.venv/
-venv/
-
-# Python
-__pycache__/
-*.py[cod]
-*.so
-*.egg-info/
-.pytest_cache/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-
-# Logs
-*.log
-
-# Results / generated files
-results/
-output/
-outputs/
+# trained models: hundreds of MB, regenerable from the trainers
 runs/
-ogs/
+*.npz
 
-# Model checkpoints
-checkpoints/
-*.pt
-*.pth
-*.ckpt
-
-# Large datasets
+# datasets
 data/
-datasets/
-*.h5
-*.hdf5
-*.mp4
-*.avi
-*.mov
+cifar-10-*
 
-# Temporary files
-tmp/
-temp/
-data/cifar-10-batches-py/
-data/
+# python
+__pycache__/
+*.pyc
+*.bak
+
+# latex build products
+*.aux
+*.log
+*.out
+*.blg
+*.bbl
+*_final.tex
