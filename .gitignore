@@ -1,0 +1,50 @@
+# Virtual environments
+matt2026/
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Results / generated files
+results/
+output/
+outputs/
+runs/
+logs/
+
+# Model checkpoints
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Large datasets
+data/
+datasets/
+*.h5
+*.hdf5
+*.mp4
+*.avi
+*.mov
+
+# Temporary files
+tmp/
+temp/

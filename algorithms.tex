@@ -1,0 +1,221 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\title{Bidirectional Latent Action Model:\\Training Algorithms}
+\author{Author\\Seoul National University\\\texttt{angel0119@snu.ac.kr}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note specifies the training algorithms for the Bidirectional Latent
+Action Model (BLAM), a fold/unfold latent-action architecture for cloth
+manipulation. A single encoder infers a fold action $z_{\text{fold}}$ from a
+state pair $(s_t, s_{t+1})$; a small operator $g_\psi$ derives the unfold
+action $z_{\text{unfold}}$ from it, a relationship enforced by
+\emph{cyclosymmetry}; a shared decoder $D_\theta$, run in both directions, is
+tied together by \emph{cycle-consistency}; and the resulting latent actions
+are distilled into a single deployable policy $\pi_\omega$. We give the
+consolidated Stage 1 representation-learning algorithm, the Stage 2 policy
+distillation algorithm, and standalone/subroutine forms of the cyclosymmetry
+and cycle-consistency losses used inside Stage 1.
+\end{abstract}
+
+\section{Overview}
+\label{sec:overview}
+
+The architecture has two training stages. Stage 1
+(Algorithm~\ref{alg:blam-stage1-final}) learns a cyclosymmetric,
+cycle-consistent latent action space from paired cloth states connected by a
+folding action and its inverse. Stage 2 (Algorithm~\ref{alg:blam-distill})
+distills the frozen Stage 1 representations, together with real
+ground-truth manipulator-action labels, into a single lightweight policy
+$\pi_\omega$ that runs with no encoder or decoder at inference time.
+Algorithms~\ref{alg:cyclosymmetry} and~\ref{alg:cycle-consistency} give
+standalone pretraining forms of the two structural losses used inside Stage
+1, together with the exact subroutines
+(Algorithms~\ref{alg:cyclosymmetry-sub} and~\ref{alg:cycle-sub-v2}) that
+Stage 1 calls.
+
+\section{Stage 1: Representation Learning}
+\label{sec:stage1}
+
+\begin{algorithm}[H]
+\caption{Bidirectional Latent Action Model --- Stage 1 Training (Consolidated)}
+\label{alg:blam-stage1-final}
+\begin{algorithmic}[1]
+\Require Paired cloth-state dataset $\mathcal{D} = \{(s_t, s_{t+1})\}$
+\Require Stochastic encoder $E_\phi$ (outputs $\mu_{\text{fold}}, \sigma_{\text{fold}}$), cyclosymmetric operator $g_\psi$, shared decoder $D_\theta$
+\Require Loss weights $\lambda_{\text{fold}}, \lambda_{\text{unfold}}, \lambda_{\text{cyclosym}}, \lambda_{\text{cycle}}, \lambda_{\text{KL}}$
+\Require Verification tolerance $\tau_{\text{cycle}}$
+\Require Adam hyperparameters: learning rate $\alpha$, $\beta_1, \beta_2$, $\epsilon_{\text{adam}}$
+\Ensure Trained parameters $\phi, \psi, \theta$
+\State Initialize $\phi, \psi, \theta$; initialize Adam moment buffers $m \gets 0$, $v \gets 0$
+\While{not converged}
+    \State Sample minibatch $\{(s_t, s_{t+1})\} \sim \mathcal{D}$
+    \State $(\mu_{\text{fold}}, \sigma_{\text{fold}}) \gets E_\phi(s_t, s_{t+1})$ \Comment{single encoder pass}
+    \State $\varepsilon \sim \mathcal{N}(0, I)$; \quad $z_{\text{fold}} \gets \mu_{\text{fold}} + \sigma_{\text{fold}} \odot \varepsilon$ \Comment{reparameterization}
+    \State $z_{\text{unfold}} \gets g_\psi(z_{\text{fold}})$ \Comment{derived, no second encoder pass}
+    \State $\hat{s}_{t+1} \gets D_\theta(s_t, z_{\text{fold}})$ \Comment{fold decode --- computed once, reused below}
+    \State $\hat{s}_t \gets D_\theta(s_{t+1}, z_{\text{unfold}})$ \Comment{unfold decode, shared weights}
+    \State $\mathcal{L}_{\text{fold}} \gets \lVert \hat{s}_{t+1} - s_{t+1} \rVert^2$
+    \State $\mathcal{L}_{\text{unfold}} \gets \lVert \hat{s}_t - s_t \rVert^2$
+    \State $\mathcal{L}_{\text{cyclosym}} \gets \textsc{CyclosymmetryLoss}(z_{\text{fold}}, z_{\text{unfold}}, \psi)$ \Comment{Algorithm~\ref{alg:cyclosymmetry-sub}}
+    \State $\mathcal{L}_{\text{cycle}} \gets \textsc{CycleConsistencyLoss}(s_t, \hat{s}_{t+1}, z_{\text{unfold}}, \theta)$ \Comment{Algorithm~\ref{alg:cycle-sub-v2}, reuses $\hat{s}_{t+1}$}
+    \State $\mathcal{L}_{\text{KL}} \gets D_{\text{KL}}\big(\mathcal{N}(\mu_{\text{fold}}, \sigma_{\text{fold}}^2) \,\|\, \mathcal{N}(0, I)\big)$
+    \State $\mathcal{L} \gets \lambda_{\text{fold}}\mathcal{L}_{\text{fold}} + \lambda_{\text{unfold}}\mathcal{L}_{\text{unfold}} + \lambda_{\text{cyclosym}}\mathcal{L}_{\text{cyclosym}} + \lambda_{\text{cycle}}\mathcal{L}_{\text{cycle}} + \lambda_{\text{KL}}\mathcal{L}_{\text{KL}}$
+    \State $g \gets \nabla_{\phi,\psi,\theta}\,\mathcal{L}$
+    \State $m \gets \beta_1 m + (1-\beta_1) g$; \quad $v \gets \beta_2 v + (1-\beta_2) g^2$
+    \State $\hat{m} \gets m / (1-\beta_1^{t})$; \quad $\hat{v} \gets v / (1-\beta_2^{t})$
+    \State $(\phi,\psi,\theta) \gets (\phi,\psi,\theta) - \alpha\, \hat{m} / (\sqrt{\hat{v}} + \epsilon_{\text{adam}})$
+\EndWhile
+\State \textbf{Verification (cycle closes on held-out states):}
+\State \hspace{1em} $\Delta_{\text{cycle}} \gets \mathbb{E}_{\mathcal{D}_{\text{val}}}\big[\lVert D_\theta(D_\theta(s_t, z_{\text{fold}}), z_{\text{unfold}}) - s_t \rVert\big]$
+\State \hspace{1em} \textbf{assert} $\Delta_{\text{cycle}} < \tau_{\text{cycle}}$
+\State \Return $\phi, \psi, \theta$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Stage 2: Policy Distillation}
+\label{sec:stage2}
+
+\begin{algorithm}[H]
+\caption{Policy Distillation from Bidirectional Latent Actions}
+\label{alg:blam-distill}
+\begin{algorithmic}[1]
+\Require Labeled paired dataset $\mathcal{D} = \{(s_t, s_{t+1}, a_t^{\text{fold}}, a_t^{\text{unfold}})\}$, where $a_t^{\text{fold}}, a_t^{\text{unfold}}$ are real ground-truth manipulator actions
+\Require Frozen Stage 1 parameters $\phi, \psi, \theta$ (encoder $E_\phi$, operator $g_\psi$, decoder $D_\theta$)
+\Require Student policy $\pi_\omega$ (single network, $s \mapsto a$)
+\Require Loss weights $\lambda_{\text{BC}}, \lambda_{\text{ground}}, \lambda_{\text{sup}}$
+\Require Adam hyperparameters: learning rate $\alpha$, $\beta_1, \beta_2$, $\epsilon_{\text{adam}}$
+\Ensure Trained parameters $\omega$
+\State Initialize $\omega$; initialize Adam moment buffers $m \gets 0$, $v \gets 0$
+\While{not converged}
+    \State Sample minibatch $\{(s_t, s_{t+1}, a_t^{\text{fold}}, a_t^{\text{unfold}})\} \sim \mathcal{D}$
+    \State \textbf{With frozen $\phi, \psi, \theta$ (no gradient):}
+    \State \hspace{1em} $z_{\text{fold}} \gets E_\phi(s_t, s_{t+1})$
+    \State \hspace{1em} $z_{\text{unfold}} \gets g_\psi(z_{\text{fold}})$
+    \State \textbf{Student forward passes (both directions, one policy):}
+    \State \hspace{1em} $\hat{a}_t^{\text{fold}} \gets \pi_\omega(s_t)$
+    \State \hspace{1em} $\hat{a}_t^{\text{unfold}} \gets \pi_\omega(s_{t+1})$
+    \State \textbf{Distillation loss (latent targets from frozen Stage 1):}
+    \State \hspace{1em} $\mathcal{L}_{\text{BC}} \gets \lVert \hat{a}_t^{\text{fold}} - z_{\text{fold}} \rVert^2 + \lVert \hat{a}_t^{\text{unfold}} - z_{\text{unfold}} \rVert^2$
+    \State \textbf{Grounding loss (frozen decoder checks the decoded action reproduces the target state):}
+    \State \hspace{1em} $\mathcal{L}_{\text{ground}} \gets \lVert D_\theta(s_t, \hat{a}_t^{\text{fold}}) - s_{t+1} \rVert^2 + \lVert D_\theta(s_{t+1}, \hat{a}_t^{\text{unfold}}) - s_t \rVert^2$
+    \State \textbf{Supervised loss (real manipulator-action labels):}
+    \State \hspace{1em} $\mathcal{L}_{\text{sup}} \gets \lVert \hat{a}_t^{\text{fold}} - a_t^{\text{fold}} \rVert^2 + \lVert \hat{a}_t^{\text{unfold}} - a_t^{\text{unfold}} \rVert^2$
+    \State $\mathcal{L} \gets \lambda_{\text{BC}}\mathcal{L}_{\text{BC}} + \lambda_{\text{ground}}\mathcal{L}_{\text{ground}} + \lambda_{\text{sup}}\mathcal{L}_{\text{sup}}$
+    \State $g \gets \nabla_{\omega}\,\mathcal{L}$
+    \State $m \gets \beta_1 m + (1-\beta_1) g$; \quad $v \gets \beta_2 v + (1-\beta_2) g^2$
+    \State $\hat{m} \gets m / (1-\beta_1^{t})$; \quad $\hat{v} \gets v / (1-\beta_2^{t})$
+    \State $\omega \gets \omega - \alpha\, \hat{m} / (\sqrt{\hat{v}} + \epsilon_{\text{adam}})$
+\EndWhile
+\State \Return $\omega$ \Comment{deployed policy: $s_t \mapsto a_t$, no encoder/decoder at inference}
+\end{algorithmic}
+\end{algorithm}
+
+\section{Latent Cyclosymmetry Learning}
+\label{sec:cyclosym}
+
+\begin{algorithm}[H]
+\caption{Latent Cyclosymmetry Learning (Standalone Pretraining)}
+\label{alg:cyclosymmetry}
+\begin{algorithmic}[1]
+\Require Paired cloth-state dataset $\mathcal{D} = \{(s_t, s_{t+1})\}$
+\Require Encoder $E_\phi$ (frozen or co-trained), cyclosymmetric operator $g_\psi$
+\Require Loss weight $\lambda_{\text{cyclosym}}$; non-triviality margin $\epsilon_{\min}$; involution tolerance $\tau$
+\Require Adam hyperparameters: learning rate $\alpha$, $\beta_1, \beta_2$, $\epsilon_{\text{adam}}$
+\Ensure Trained parameters $\psi$ such that $g_\psi$ is a non-trivial involution: $g_\psi(g_\psi(z_{\text{fold}})) \approx z_{\text{fold}}$ and $g_\psi(z_{\text{fold}}) \not\approx z_{\text{fold}}$
+\State Initialize $\psi$; initialize Adam moment buffers $m \gets 0$, $v \gets 0$
+\While{not converged}
+    \State Sample minibatch $\{(s_t, s_{t+1})\} \sim \mathcal{D}$
+    \State $z_{\text{fold}} \gets E_\phi(s_t, s_{t+1})$ \Comment{stop-gradient into $\phi$ if $\phi$ is frozen}
+    \State $z_{\text{unfold}} \gets g_\psi(z_{\text{fold}})$
+    \State $z_{\text{fold}}' \gets g_\psi(z_{\text{unfold}})$
+    \State $\mathcal{L}_{\text{cyclosym}} \gets \lVert z_{\text{fold}}' - z_{\text{fold}} \rVert^2$ \Comment{symmetric, two-sided: gradients flow through both branches}
+    \State $g \gets \nabla_{\psi}\,\lambda_{\text{cyclosym}}\mathcal{L}_{\text{cyclosym}}$
+    \State $m \gets \beta_1 m + (1-\beta_1) g$; \quad $v \gets \beta_2 v + (1-\beta_2) g^2$
+    \State $\hat{m} \gets m / (1-\beta_1^{t})$; \quad $\hat{v} \gets v / (1-\beta_2^{t})$
+    \State $\psi \gets \psi - \alpha\, \hat{m} / (\sqrt{\hat{v}} + \epsilon_{\text{adam}})$
+\EndWhile
+\State \textbf{Verification 1 (involution holds):}
+\State \hspace{1em} $\Delta_{\text{inv}} \gets \mathbb{E}_{\mathcal{D}_{\text{val}}}\big[\lVert g_\psi(g_\psi(z_{\text{fold}})) - z_{\text{fold}} \rVert\big]$
+\State \hspace{1em} \textbf{assert} $\Delta_{\text{inv}} < \tau$
+\State \textbf{Verification 2 (non-trivial: rules out degenerate $g_\psi \approx \mathrm{id}$):}
+\State \hspace{1em} $\Delta_{\text{triv}} \gets \mathbb{E}_{\mathcal{D}_{\text{val}}}\big[\lVert g_\psi(z_{\text{fold}}) - z_{\text{fold}} \rVert\big]$
+\State \hspace{1em} \textbf{assert} $\Delta_{\text{triv}} > \epsilon_{\min}$
+\State \Return $\psi$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{\textsc{CyclosymmetryLoss} Subroutine (called from Algorithm~\ref{alg:blam-stage1-final})}
+\label{alg:cyclosymmetry-sub}
+\begin{algorithmic}[1]
+\Function{CyclosymmetryLoss}{$z_{\text{fold}},\, z_{\text{unfold}},\, \psi$}
+    \Comment{$z_{\text{unfold}}$ is already computed at Alg.~\ref{alg:blam-stage1-final}, line 6 --- not recomputed here}
+    \State $z_{\text{fold}}' \gets g_\psi(z_{\text{unfold}})$ \Comment{second application of $g_\psi$, reuses the same $\psi$ being jointly trained}
+    \State \Return $\lVert z_{\text{fold}}' - z_{\text{fold}} \rVert^2$ \Comment{symmetric: gradients flow through both branches into $\psi$ and, via $z_{\text{unfold}}$, into $\phi$}
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\section{Cycle Consistency Algorithm}
+\label{sec:cycle}
+
+\begin{algorithm}[H]
+\caption{Cycle Consistency Learning (Standalone Pretraining)}
+\label{alg:cycle-consistency}
+\begin{algorithmic}[1]
+\Require Paired cloth-state dataset $\mathcal{D} = \{(s_t, s_{t+1})\}$
+\Require Encoder $E_\phi$, cyclosymmetric operator $g_\psi$ (frozen or co-trained), shared decoder $D_\theta$
+\Require Loss weight $\lambda_{\text{cycle}}$; cycle-error tolerance $\tau_{\text{cycle}}$
+\Require Adam hyperparameters: learning rate $\alpha$, $\beta_1, \beta_2$, $\epsilon_{\text{adam}}$
+\Ensure Trained parameters $\theta$ such that folding then unfolding returns the original state: $D_\theta(D_\theta(s_t, z_{\text{fold}}), z_{\text{unfold}}) \approx s_t$
+\State Initialize $\theta$; initialize Adam moment buffers $m \gets 0$, $v \gets 0$
+\While{not converged}
+    \State Sample minibatch $\{(s_t, s_{t+1})\} \sim \mathcal{D}$
+    \State $z_{\text{fold}} \gets E_\phi(s_t, s_{t+1})$ \Comment{stop-gradient into $\phi$ if $\phi$ is frozen}
+    \State $z_{\text{unfold}} \gets g_\psi(z_{\text{fold}})$ \Comment{stop-gradient into $\psi$ if $\psi$ is frozen}
+    \State $\tilde{s}_{t+1} \gets D_\theta(s_t, z_{\text{fold}})$ \Comment{forward: fold}
+    \State $\bar{s}_t \gets D_\theta(\tilde{s}_{t+1}, z_{\text{unfold}})$ \Comment{backward: unfold the folded prediction}
+    \State $\mathcal{L}_{\text{cycle}} \gets \lVert \bar{s}_t - s_t \rVert^2$
+    \State $g \gets \nabla_{\theta}\,\lambda_{\text{cycle}}\mathcal{L}_{\text{cycle}}$
+    \State $m \gets \beta_1 m + (1-\beta_1) g$; \quad $v \gets \beta_2 v + (1-\beta_2) g^2$
+    \State $\hat{m} \gets m / (1-\beta_1^{t})$; \quad $\hat{v} \gets v / (1-\beta_2^{t})$
+    \State $\theta \gets \theta - \alpha\, \hat{m} / (\sqrt{\hat{v}} + \epsilon_{\text{adam}})$
+\EndWhile
+\State \textbf{Verification (cycle closes on held-out states):}
+\State \hspace{1em} $\Delta_{\text{cycle}} \gets \mathbb{E}_{\mathcal{D}_{\text{val}}}\big[\lVert D_\theta(D_\theta(s_t, z_{\text{fold}}), z_{\text{unfold}}) - s_t \rVert\big]$
+\State \hspace{1em} \textbf{assert} $\Delta_{\text{cycle}} < \tau_{\text{cycle}}$
+\State \Return $\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{\textsc{CycleConsistencyLoss} Subroutine (de-duplicated; called from Algorithm~\ref{alg:blam-stage1-final})}
+\label{alg:cycle-sub-v2}
+\begin{algorithmic}[1]
+\Function{CycleConsistencyLoss}{$s_t,\, \hat{s}_{t+1},\, z_{\text{unfold}},\, \theta$}
+    \Comment{$\hat{s}_{t+1}$ passed in, not recomputed --- caller already has it}
+    \State $\bar{s}_t \gets D_\theta(\hat{s}_{t+1}, z_{\text{unfold}})$ \Comment{only new decoder call in this subroutine}
+    \State \Return $\lVert \bar{s}_t - s_t \rVert^2$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\end{document}

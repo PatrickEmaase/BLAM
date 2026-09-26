@@ -1,0 +1,629 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Which Divergences Control Representations?
+% Tail Sensitivity and the Limits of Identifiability
+%
+% Target: ICML 2027 (projected abstract Jan 16 / paper Jan 22, 2027 -- CONFIRM
+% on icml.cc before relying on these dates).
+% Internal freeze: December 31, 2026.
+%
+% HOW TO USE THIS FILE
+%   Each \TODO{} is keyed to a schedule gate (G1 = Oct 5, G2 = Nov 2,
+%   G3 = Nov 30). Sections are ordered so that the theory written in weeks 1-8
+%   lands directly into Secs. 3-5 as it is proved, rather than being
+%   reconstructed in December.
+%
+%   Proof obligations referenced as [O1]..[O6]:
+%     O1 Rate lemma for D_alpha along the rho-family; critical order alpha*
+%     O2 Master impossibility: any TV-continuous divergence fails
+%     O3 Quantitative lower bound on d_{f,g}, uniform in rho
+%     O4 Max-divergence controls representations
+%     O5 Conditional control for KL on Theta_delta
+%     O6 Tightened constant via Hoffman-Wielandt
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass{article}
+
+% --- ICML 2027 style -----------------------------------------------------
+% Replace with the official icml2027.sty when released. Until then icml2026.sty
+% is layout-compatible; do NOT submit against the wrong year's style file.
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{xcolor}
+
+% \usepackage{icml2027}            % camera-ready
+\usepackage[accepted]{icml2027}    % <-- comment out for anonymous submission
+
+% --- macros --------------------------------------------------------------
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\newcommand{\GATE}[1]{\textcolor{blue}{\textsf{\small (#1)}}}
+
+\newcommand{\X}{\mathcal{X}}
+\newcommand{\Y}{\mathcal{Y}}
+\newcommand{\bff}{\mathbf{f}}
+\newcommand{\bfg}{\mathbf{g}}
+\newcommand{\bfL}{\mathbf{L}}
+\newcommand{\bfN}{\mathbf{N}}
+\newcommand{\dKL}{d_{\mathrm{KL}}}
+\newcommand{\dLLV}{d^{\lambda}_{\mathrm{LLV}}}
+\newcommand{\dSVD}{d_{\mathrm{SVD}}}
+\newcommand{\dfg}{d_{\bff,\bfg}}
+\newcommand{\Dalpha}{D_{\alpha}}
+\newcommand{\Dinf}{D_{\infty}}
+\newcommand{\psix}{\psi_{x}}
+\newcommand{\psiy}{\psi_{y}}
+\newcommand{\TV}{\mathrm{TV}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\Cov}{\mathrm{Cov}}
+\newcommand{\simL}{\sim_{L}}
+\newcommand{\Thetadelta}{\Theta_{\delta}}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{conjecture}[theorem]{Conjecture}
+
+\icmltitlerunning{Which Divergences Control Representations?}
+
+\begin{document}
+
+\twocolumn[
+\icmltitle{Which Divergences Control Representations?\\
+           Tail Sensitivity and the Limits of Identifiability}
+
+\icmlsetsymbol{equal}{*}
+
+\begin{icmlauthorlist}
+\icmlauthor{Anonymous}{anon}
+\end{icmlauthorlist}
+
+\icmlaffiliation{anon}{Anonymous Institution}
+\icmlcorrespondingauthor{Anonymous}{anon@example.org}
+
+\icmlkeywords{representational similarity, identifiability, divergences,
+              Renyi divergence, representation learning}
+
+\vskip 0.3in
+]
+
+\printAffiliationsAndNotice{}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{abstract}
+%
+% DRAFTING NOTE: written against the expected results. Every numeric claim
+% carries a \TODO until the corresponding experiment closes. Keep
+% "representations" ahead of "divergence" in the opening sentence: the
+% divergence family is the instrument, the representations are the object.
+%
+Whether two networks that induce similar output distributions must learn
+similar internal representations depends, we show, on which notion of
+distributional closeness is used. For a model family covering autoregressive
+language models, contrastive pre-training and supervised classifiers, we ask
+which divergences \emph{control} representational dissimilarity, in the sense
+of admitting a modulus of continuity that forces representations together as
+the divergence vanishes. Indexing divergences by R\'enyi order $\alpha$, we
+show that the answer is governed by a sharp threshold. For any two models whose
+predictions concentrate on a common label while their tail log-likelihood
+ratios diverge, there is a critical order
+$\alpha^{\star}=\min_{y}b_{y}/(b_{y}-a_{y})$, determined by the two models'
+margin geometry, below which the divergence vanishes and above which it grows
+without bound. We prove $\alpha^{\star}>1$ always. Consequently the entire
+segment $\alpha\le1$ fails to control representations at once, which covers
+total variation, squared Hellinger, Jensen--Shannon and Kullback--Leibler, and
+subsumes the known KL counterexample as the boundary case. Above the threshold
+control is recovered, with a modulus that degrades both as $\alpha\downarrow1$
+and as the models grow confident: we prove
+$\sup_{y}|\log(p/p')|\le D_{\alpha}+\log(1/\delta)/(\alpha-1)$ where
+$\delta$ lower-bounds the conditional probabilities, so KL itself controls on
+the subclass $\Theta_{\delta}$. We further show that $\alpha^{\star}$ cannot be
+inflated for free: geometries that raise it provably shrink the
+representational separation they were built to hide. This explains why
+confident classifiers and language models, which place negligible mass on most
+labels, are exactly the regimes in which likelihood agreement carries the least
+representational information.
+\TODO{fold in headline empirical numbers once C1--C2 close (G3)}
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+\label{sec:intro}
+
+\TODO{Write last, after Secs. 3--5 settle. Target 1.25 columns.}
+
+Paragraph plan:
+\begin{enumerate}
+  \item Representational similarity across independently trained networks is an
+        active question; identifiability theory supplies the invariance that a
+        similarity measure ought to respect.
+  \item Prior work establishes that \emph{exact} likelihood equality pins
+        representations down to an invertible linear map, and that small KL
+        divergence does not. Frame that as one data point rather than a
+        conclusion: the interesting question is which divergences do.
+  \item State the organising question: for which $D$ does
+        $D \le \epsilon \Rightarrow \dfg \le h(\epsilon)$ with $h(0^{+})=0$?
+  \item Answer in three parts: a mechanism (tail insensitivity), an
+        impossibility covering a whole topology's worth of divergences, and a
+        positive endpoint plus a conditional recovery for KL.
+  \item Practical consequence: model confidence, not model quality, governs how
+        much representational information likelihood agreement carries.
+\end{enumerate}
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item A definition of \emph{control} (Def.~\ref{def:control}) that makes both
+        positive and negative claims about divergence--representation coupling
+        falsifiable and uniform over a model class.
+  \item An impossibility result covering all divergences continuous in total
+        variation (Thm.~\ref{thm:master}), subsuming the known KL failure, with
+        a quantitative lower bound on the residual dissimilarity
+        (Thm.~\ref{thm:lower}).
+  \item A critical R\'enyi order $\alpha^{\star}$ (Thm.~\ref{thm:alphastar})
+        determined by tail geometry, with matching empirics.
+  \item Positive results: max-divergence controls
+        (Thm.~\ref{thm:maxdiv-control}); KL controls on $\Thetadelta$
+        (Thm.~\ref{thm:kl-conditional}); a tightened constant improving the
+        known bound by $\sqrt{M}$ (Prop.~\ref{prop:tighten}).
+  \item Experiments on constructed models, synthetic angular classification and
+        CIFAR-10 confirming the mechanism, including a label-smoothing
+        intervention that \emph{restores} KL's predictive power as predicted.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Setup}
+\label{sec:setup}
+
+\subsection{Model class and linear identifiability}
+\label{sec:model-class}
+
+Models are pairs $(\bff,\bfg)\in\Theta$ with $\bff:\X\to\mathbb{R}^{M}$ the
+embedding and $\bfg:\Y\to\mathbb{R}^{M}$ the unembedding, inducing
+\begin{equation}
+  p_{\bff,\bfg}(y\mid x)
+  = \frac{\exp(\bff(x)^{\top}\bfg(y))}
+         {\sum_{y'\in\Y}\exp(\bff(x)^{\top}\bfg(y'))}.
+  \label{eq:model}
+\end{equation}
+Displaced maps $\bff_{0}(x)=\bff(x)-\bff(x_{0})$,
+$\bfg_{0}(y)=\bfg(y)-\bfg(y_{0})$; $\bfL$ has columns $\bfg_{0}(y)$ and $\bfN$
+columns $\bff_{0}(x)$.
+
+\TODO{Compress prior setup to $\approx$0.6 column. Restate the diversity
+condition and linear identifiability as background, cite, do not reprove.}
+
+\subsection{Representational dissimilarity}
+\label{sec:repdis}
+
+\TODO{Recall $\dSVD$ and $\dfg$. State the invariance class in one sentence and
+defer the comparison with CCA-based measures to Sec.~\ref{sec:discussion}.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{When Does a Divergence Control Representations?}
+\label{sec:control}
+
+\begin{definition}[Control]
+\label{def:control}
+A divergence $D$ on conditional distributions \emph{controls} $\dfg$ on a model
+class $\Theta$ if there exists a nondecreasing $h:\mathbb{R}_{+}\to\mathbb{R}_{+}$
+with $h(0^{+})=0$ such that for all
+$(\bff,\bfg),(\bff',\bfg')\in\Theta$,
+\begin{equation}
+  D\!\left(p_{\bff,\bfg},p_{\bff',\bfg'}\right)\le\epsilon
+  \;\Longrightarrow\;
+  \dfg\!\left((\bff,\bfg),(\bff',\bfg')\right)\le h(\epsilon).
+  \label{eq:control}
+\end{equation}
+We call $h$ a \emph{modulus of control} for $D$ on $\Theta$.
+\end{definition}
+
+\begin{remark}
+The quantifiers matter. Control is uniform over $\Theta$; a divergence may fail
+on $\Theta$ yet control on a subclass, which is exactly the situation for KL
+(Sec.~\ref{sec:positive}).
+\end{remark}
+
+\TODO{One short paragraph: recover the known results as instances. Exact
+likelihood equality is $h\equiv 0$; the LLV bound is $h(\epsilon)=2M\epsilon$;
+the known KL counterexample is a failure of \eqref{eq:control}. \GATE{G1}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Tail Insensitivity and Impossibility}
+\label{sec:negative}
+
+\subsection{The co-concentration mechanism}
+\label{sec:mechanism}
+
+The key structural fact about the norm-growth construction is that \emph{both}
+models converge to the same point mass while their tail log-ratios diverge.
+
+\begin{lemma}[Co-concentration]
+\label{lem:coconc}
+Along the $\rho$-indexed family, for every $x\in\X$,
+$p_{\bff,\bfg}(\hat y\mid x)\to1$ and $p_{\bff',\bfg'}(\hat y\mid x)\to1$ for a
+\emph{common} $\hat y$, hence
+$\|p_{\bff,\bfg}(\cdot\mid x)-p_{\bff',\bfg'}(\cdot\mid x)\|_{\TV}\to0$, while
+$\sup_{y}|\log p_{\bff,\bfg}(y\mid x)-\log p_{\bff',\bfg'}(y\mid x)|=\Theta(\rho)$.
+\end{lemma}
+\begin{proof}
+\TODO{[O2] Short; assemble from the existing concentration argument plus the
+angle-matching assumption. \GATE{G1}}
+\end{proof}
+
+\begin{theorem}[Master impossibility]
+\label{thm:master}
+Let $D$ be any divergence that vanishes along sequences converging in total
+variation. Then $D$ does not control $\dfg$ on $\Theta$. In particular total
+variation, squared Hellinger, Jensen--Shannon, every bounded $f$-divergence,
+and Kullback--Leibler all fail to control $\dfg$.
+\end{theorem}
+\begin{proof}
+\TODO{[O2] Immediate from Lem.~\ref{lem:coconc} plus
+Thm.~\ref{thm:lower}. KL needs its own line since it is not TV-continuous in
+general; cite the existing rate. \GATE{G1}}
+\end{proof}
+
+\subsection{How far apart do the representations stay?}
+\label{sec:lower}
+
+\begin{theorem}[Uniform separation]
+\label{thm:lower}
+There is $c>0$, independent of $\rho$ and explicit in the cluster geometry,
+such that $\max\dSVD\ge c$ for every member of the family.
+\end{theorem}
+\begin{proof}
+\TODO{[O3] The rotation is explicit ($\pi/2$ in the first two coordinates), so
+compute the cross-covariance singular values in closed form. This upgrades
+``not linearly equivalent'' to ``quantitatively far'' and is what makes the
+impossibility bite. \GATE{G2}}
+\end{proof}
+
+\subsection{A critical R\'enyi order}
+\label{sec:alphastar}
+
+Fix an input $x$ and write $s_{y}=\cos(\bff(x),\bfg(y))$, $\hat y=\arg\max_{y}s_{y}$,
+and let
+\begin{equation}
+  a_{y}:=s_{\hat y}-s_{y}>0, \qquad b_{y}:=s'_{\hat y}-s'_{y}>0
+  \label{eq:gaps}
+\end{equation}
+be the margin gaps under the two models. Logits are $c\rho s_{y}$, so
+$p(y\mid x)\propto e^{-c\rho a_{y}}$ and $p'(y\mid x)\propto e^{-c\rho b_{y}}$.
+Define the \emph{tilted exponent}
+\begin{equation}
+  E_{\alpha}(y) \;:=\; \alpha a_{y}+(1-\alpha)b_{y} \;=\; b_{y}+\alpha(a_{y}-b_{y}).
+  \label{eq:tilted}
+\end{equation}
+
+\begin{theorem}[Rate lemma and critical order]
+\label{thm:alphastar}
+Let $\mathcal{P}:=\{y\neq\hat y: a_{y}\neq b_{y}\}$ and suppose
+$\mathcal{P}\neq\emptyset$. Put
+\begin{equation}
+  \alpha^{\star}\;:=\;\min_{y\,:\,b_{y}>a_{y}}\frac{b_{y}}{\,b_{y}-a_{y}\,}.
+  \label{eq:alphastar}
+\end{equation}
+Then $\alpha^{\star}>1$, and as $\rho\to\infty$:
+\begin{enumerate}
+  \item[(i)] for $\alpha<\alpha^{\star}$, $\ \Dalpha=\Theta\!\big(e^{-c\rho\kappa(\alpha)}\big)$,
+        where $\kappa(\alpha)$ is the smallest value in
+        $\{E_{\alpha}(y)\}\cup\{a_{y}\}\cup\{b_{y}\}$ carrying a non-vanishing
+        total coefficient (labels with $a_{y}=b_{y}$ cancel exactly and are
+        excluded);
+  \item[(ii)] at $\alpha=1$ all first-order coefficients cancel and
+        $\dKL=\Theta\!\big(\rho\,e^{-c\rho\min_{\mathcal{P}}a_{y}}\big)$;
+  \item[(iii)] for $\alpha>\alpha^{\star}$, $\ \Dalpha$ grows \emph{linearly} in
+        $\rho$ with slope $\max_{y}(-E_{\alpha}(y))/(\alpha-1)$, increasing to
+        $\Dinf/\rho\to\max_{y}(b_{y}-a_{y})$ as $\alpha\to\infty$.
+\end{enumerate}
+\end{theorem}
+\begin{proof}
+\TODO{[O1] Write up. Expand $\log\sum_{y}p^{\alpha}p'^{1-\alpha}$ to first order
+and group the three exponent families by value; $\alpha^{\star}>1$ is immediate
+from $0<b_{y}-a_{y}<b_{y}$. \GATE{G1 -- VERIFIED NUMERICALLY 2026-09-22:
+crossover matched to $1.5\times10^{-5}$ relative, exponential rates to $<2.3\%$,
+linear slopes to $<0.1\%$; see \texttt{trackA/perx.py}.}}
+\end{proof}
+
+\begin{corollary}[The classical divergences all sit below threshold]
+\label{cor:below}
+Since $\alpha^{\star}>1$, the family defeats every divergence of order
+$\alpha\le1$. In particular total variation, squared Hellinger,
+Jensen--Shannon and Kullback--Leibler fail to control $\dfg$, recovering the
+known KL result as the boundary case $\alpha=1$ of a one-parameter statement.
+\end{corollary}
+
+\begin{proposition}[The threshold cannot be inflated for free]
+\label{prop:tradeoff}
+$\alpha^{\star}$ is large only when $a_{y}\approx b_{y}$ for the critical
+label, which simultaneously drives the representational signal
+$\max_{y}(b_{y}-a_{y})$ toward zero. Hence constructions that defeat
+higher-order divergences are exactly those whose representations are less
+dissimilar.
+\end{proposition}
+\begin{proof}
+\TODO{[O1b] Make the trade-off quantitative: lower-bound
+$\max_{y}(b_{y}-a_{y})$ by a decreasing function of $\alpha^{\star}$.
+Empirically $\mathrm{corr}=-0.59$ over 360 geometries, with mean signal
+$0.89$ in the top $\alpha^{\star}$ quintile against $1.60$ in the bottom.
+This proposition is what upgrades the negative result into an explanation of
+the positive one; prioritise it. \GATE{G2}}
+\end{proof}
+
+\begin{remark}[Monotonicity gives a well-posed threshold]
+\label{rem:monotone}
+$\Dalpha$ is nondecreasing in $\alpha$, so by the transfer lemma the set of
+controlling orders is upward closed and
+$\alpha^{\star}_{\Theta}:=\inf\{\alpha:\Dalpha\text{ controls }\dfg\text{ on }\Theta\}$
+is well defined. Theorem~\ref{thm:alphastar} lower-bounds it;
+Thm.~\ref{thm:maxdiv-control} with \eqref{eq:suff} upper-bounds it on
+$\Thetadelta$.
+\end{remark}
+
+\begin{figure}[t]
+\centering
+% \includegraphics[width=\columnwidth]{fig/ladder.pdf}
+\caption{\textbf{Divergence ladder along the norm-growth family.} Each curve is
+one divergence as the unembedding norm $\rho$ grows; representational
+dissimilarity (dashed) is flat throughout. Orders below $\alpha^{\star}$
+collapse toward zero; the max-divergence and $\dLLV$ do not.
+\TODO{from A1 \GATE{G1}}}
+\label{fig:ladder}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+% \includegraphics[width=\columnwidth]{fig/alphastar.pdf}
+\caption{\textbf{Predicted vs.\ measured critical order.} Each point is one
+permutation geometry; $x$-axis is $b_{y}/(b_{y}-a_{y})$ from
+\eqref{eq:alphastar}, $y$-axis the empirical crossover. Proximity to the
+diagonal tests the quantitative content of Thm.~\ref{thm:alphastar}.
+\TODO{from A3 \GATE{G2}}}
+\label{fig:alphastar}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Which Divergences Do Control}
+\label{sec:positive}
+
+\subsection{Max-divergence}
+\label{sec:maxdiv}
+
+\begin{theorem}[Max-divergence controls]
+\label{thm:maxdiv-control}
+Under the invertibility and non-degeneracy conditions of
+Sec.~\ref{sec:setup}, if
+$\Dinf = \sup_{x,y}\left|\log p_{\bff,\bfg}(y\mid x)-\log p_{\bff',\bfg'}(y\mid x)\right|\le\epsilon$
+then
+\begin{equation}
+  \dfg \;\le\; C(M)\,\frac{\epsilon}{\psi_{\min}},
+  \qquad \psi_{\min}:=\min_{i}\psix(y_{i};p).
+  \label{eq:maxdiv-bound}
+\end{equation}
+\end{theorem}
+\begin{proof}
+\TODO{[O4] Route through the Lemma-4.1 error term; a uniform sup bound on log
+ratios bounds each entry directly. \GATE{G2}}
+\end{proof}
+
+\begin{lemma}[R\'enyi dominates the sup log-ratio up to a confidence penalty]
+\label{lem:suff}
+For $\alpha>1$, let $r_{y}:=\log p(y\mid x)-\log p'(y\mid x)$ and
+$\delta:=\min_{x,y}p(y\mid x)$. Then
+\begin{equation}
+  \max_{y} r_{y} \;\le\; \Dalpha(p\|p') \;+\; \frac{\log(1/\delta)}{\alpha-1}.
+  \label{eq:suff}
+\end{equation}
+\end{lemma}
+\begin{proof}
+Bound the sum by its largest term and use
+$\alpha\log p+(1-\alpha)\log p'=\log p+(\alpha-1)r_{y}$:
+$\Dalpha\ge\frac{1}{\alpha-1}\max_{y}[\log p(y)+(\alpha-1)r_{y}]
+\ge\max_{y}r_{y}-\frac{\log(1/\delta)}{\alpha-1}$.
+\TODO{[O4] Symmetrise over the two orderings and chain into
+Thm.~\ref{thm:maxdiv-control}. Verified numerically; the bound is tight to
+$\approx6\%$ at $\alpha=20$. \GATE{G2}}
+\end{proof}
+
+\begin{remark}[The two axes are one]
+\label{rem:unify}
+Inequality \eqref{eq:suff} is the paper's organising identity: control requires
+$\alpha-1\gtrsim\log(1/\delta)$, so the R\'enyi order and the confidence floor
+trade off directly. Setting $\alpha\to\infty$ gives
+Thm.~\ref{thm:maxdiv-control}; holding $\alpha=1$ and bounding $\delta$ gives
+Thm.~\ref{thm:kl-conditional}. The two positive results are endpoints of one
+statement, not separate phenomena.
+\end{remark}
+
+\begin{remark}[Why LLV normalises by $\psi$]
+\label{rem:whypsi}
+The $\psi_{\min}$ in \eqref{eq:maxdiv-bound} is model-dependent, so
+$\Dinf$ alone yields a non-uniform modulus. Normalising the log-ratios by
+$\psix,\psiy$ removes exactly this dependence, which identifies $\dLLV$ as the
+scale-corrected member of the same family rather than an unrelated
+construction.
+\TODO{This remark is load-bearing for the narrative; write it carefully.}
+\end{remark}
+
+\subsection{Conditional control for KL}
+\label{sec:klcond}
+
+\begin{theorem}[KL controls on $\Thetadelta$]
+\label{thm:kl-conditional}
+Let $\Thetadelta=\{(\bff,\bfg)\in\Theta:\min_{x,y}p_{\bff,\bfg}(y\mid x)\ge\delta\}$.
+Then $\dKL$ controls $\dfg$ on $\Thetadelta$ with modulus
+$h_{\delta}(\epsilon)=C(M)\sqrt{\epsilon/\delta}$.
+\end{theorem}
+\begin{proof}
+\TODO{[O5] Mass weighting is bounded below by $\delta$, so KL dominates the
+unweighted log-ratio discrepancy up to $\delta$. Verify the exponent on
+$\epsilon$. \GATE{G2}}
+\end{proof}
+
+\begin{corollary}[Confidence, not quality]
+\label{cor:confidence}
+Two models may have arbitrarily small $\dKL$ and arbitrarily large $\dfg$
+precisely when $\delta$ is small. Since accurate classifiers and language models
+place negligible mass on most labels, these are the regimes in which likelihood
+agreement carries the least representational information.
+\end{corollary}
+
+\subsection{A tighter constant}
+\label{sec:tighten}
+
+\begin{proposition}[$\sqrt{M}$ improvement]
+\label{prop:tighten}
+Replacing the per-singular-value Weyl bound with Hoffman--Wielandt and applying
+Cauchy--Schwarz to the mean yields
+$\tfrac1M\sum_{i}|\sigma_{i}-\tilde\sigma_{i}|\le\|E\|_{F}/\sqrt{M}$, improving
+the modulus from $2M\epsilon$ to $O(\sqrt{M}\epsilon)$ and widening the
+non-vacuous range to $\epsilon<O(1/\sqrt{M})$.
+\end{proposition}
+\begin{proof}
+\TODO{[O6] Also revisit the entrywise covariance inequality on
+$E_{ij}=\Cov[z_{i},z_{j}-w_{j}]$, which assumes simultaneous perfect
+correlation across all $M^{2}$ entries and is likely loose by a further factor.
+\GATE{G2}}
+\end{proof}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Experiments}
+\label{sec:experiments}
+
+We report (i) constructed-model tests of the mechanism, (ii) synthetic angular
+classification across widths and class counts, and (iii) CIFAR-10, including an
+intervention that manipulates $\delta$ directly. Full protocols in
+App.~\ref{app:expdetails}; code at \TODO{repo URL}.
+
+\paragraph{Primary metric: control curves.}
+For each divergence we plot the empirical modulus
+$\hat h(\epsilon)=\sup\{\dfg : D\le\epsilon\}$, the direct counterpart of
+Def.~\ref{def:control}. Failure of $\hat h$ to approach zero as
+$\epsilon\to0$ is evidence of non-control.
+
+\paragraph{Statistics.}
+All intervals are 95\% cluster bootstrap over \emph{seeds}, not over pairs:
+$n$ seeds give $\binom{n}{2}$ dependent pairs, so pair-level resampling is
+anticonservative. \TODO{state $n$ per setting}
+
+\subsection{Constructed models: the mechanism}
+\label{sec:exp-constructed}
+\TODO{A1--A3. Fig.~\ref{fig:ladder}, Fig.~\ref{fig:alphastar}, and a rate table
+($\log\Dalpha$ vs.\ $\rho$ slopes against theory). \GATE{G1--G2}}
+
+\subsection{Synthetic angular classification}
+\label{sec:exp-synthetic}
+\TODO{B1 control curves; B2 confidence intervention via temperature and label
+smoothing; B3 width sweep \emph{at matched training loss} (the unmatched
+comparison confounds inductive bias with fit quality -- report the regression
+with achieved loss as covariate); B4 scaling in class count. \GATE{G3}}
+
+\begin{figure*}[t]
+\centering
+% \includegraphics[width=\textwidth]{fig/control_curves.pdf}
+\caption{\textbf{Control curves.} Empirical modulus $\hat h(\epsilon)$ per
+divergence, across seed pairs. Panels: synthetic (4/6/10/18 classes) and
+CIFAR-10 ($M=2,3,5$). \TODO{from B1, C1 \GATE{G3}}}
+\label{fig:control}
+\end{figure*}
+
+\subsection{CIFAR-10}
+\label{sec:exp-cifar}
+\TODO{C1 tail localisation: divergences restricted to top-$k$ vs.\ tail,
+$k=1..9$; prediction is that KL saturates by $k=1$ while $\dfg$ is driven by
+$k\ge3$. C2 label-smoothing intervention (the causal test; prioritise). C3
+non-vacuity fraction per $M$ under Prop.~\ref{prop:tighten}. C4 robustness
+across $m_{\mathrm{CCA}}$, linear CKA, Procrustes, $\dfg$ -- keep in main text,
+reviewers will ask. \GATE{G3}}
+
+\subsection{Language modelling}
+\label{sec:exp-lm}
+\TODO{Optional (Track D). Small tied-embedding transformer, divergences on a
+subsampled label set. Drop if week 10 is tight; the paper stands without it,
+but it closes the gap between the stated motivation and the evidence.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Related Work}
+\label{sec:related}
+\TODO{Four short paragraphs, $\approx$0.75 column: (i) representational
+similarity measures and their invariances; (ii) linear identifiability for this
+model family; (iii) robustness of identifiability under approximate likelihood
+maximisation, including $\varepsilon$-non-identifiability; (iv) R\'enyi and
+max-divergence outside this setting, where the max-divergence is already the
+standard tool for worst-case ratio control. Point (iv) is a genuine connection,
+not decoration.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Limitations.}
+\TODO{Be direct. (a) Control is stated for embeddings and unembeddings, not
+intermediate layers. (b) $\dfg$ has a specific invariance class, narrower than
+CCA-based measures; we do not claim it is the right one. (c) The label-set
+diversity assumption limits applicability when classes are fewer than the
+representation dimension. (d) $\alpha^{\star}$ is derived for a particular
+adversarial family; whether trained models realise comparable geometries is an
+empirical question we only partly answer. Do not bury (d).}
+
+\paragraph{What this changes in practice.}
+\TODO{One paragraph. Report $\delta$ alongside any KL-based similarity claim;
+prefer high-order or max-divergence when comparing confident models; treat
+matched loss as necessary but far from sufficient for matched representations.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Impact Statement}
+\TODO{Standard ICML paragraph. This is foundational work on when representation
+comparisons are meaningful; the main societal relevance is that overclaiming
+representational agreement from likelihood agreement can mislead
+interpretability and distillation pipelines.}
+
+\section*{Acknowledgements}
+\TODO{Omit for anonymous submission.}
+
+\bibliographystyle{icml2027}
+\bibliography{references}
+
+\newpage
+\appendix
+\onecolumn
+
+\section{Notation}
+\label{app:notation}
+\TODO{Table, extended from the prior paper with $\Dalpha,\Dinf,\alpha^{\star},
+\Thetadelta,\delta,h(\cdot)$.}
+
+\section{Proofs for Section~\ref{sec:negative}}
+\label{app:neg}
+\TODO{[O1] rate lemma; [O2] master impossibility; [O3] uniform separation.
+\textbf{Write these in weeks 1--4 as they are proved, not in December.}}
+
+\section{Proofs for Section~\ref{sec:positive}}
+\label{app:pos}
+\TODO{[O4] max-divergence; [O5] conditional KL; [O6] tightened constant.
+Weeks 5--8.}
+
+\section{Experimental Details}
+\label{app:expdetails}
+\TODO{Constructed-model protocol; synthetic data generation; CIFAR-10 training
+(ResNet18 embedding, $M\in\{2,3,5\}$, 10 seeds, smoothing arms); divergence
+estimation and the $\X_{\mathrm{LLV}}/\Y_{\mathrm{LLV}}$ selection procedure --
+state plainly that the reported value is a minimum over a random search and
+report sensitivity to the number of draws.}
+
+\section{Additional Results}
+\label{app:extra}
+\TODO{Per-$M$ and per-class-count breakdowns; alternative similarity measures;
+compute budget.}
+
+\end{document}
