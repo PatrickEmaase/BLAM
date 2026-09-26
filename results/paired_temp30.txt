@@ -1,0 +1,13 @@
+30 models, M=2
+
+    T      rho   marginal 95% CI
+    1    0.652   [ 0.374,  0.801]
+    2    0.689   [ 0.423,  0.832]
+    4    0.714   [ 0.463,  0.850]
+    8    0.736   [ 0.496,  0.863]
+   16    0.761   [ 0.543,  0.878]
+
+PAIRED: rho(T=16) - rho(T=1)
+  observed +0.1091   95% CI [+0.0442, +0.2021]
+  P(increase) = 0.9998   n_boot = 4000
+  EXCLUDES zero -> the rise is significant

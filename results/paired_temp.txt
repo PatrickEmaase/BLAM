@@ -1,0 +1,13 @@
+11 models, M=2
+
+    T      rho   marginal 95% CI
+    1    0.693   [-0.118,  0.918]
+    2    0.736   [-0.007,  0.921]
+    4    0.760   [ 0.111,  0.921]
+    8    0.783   [ 0.207,  0.931]
+   16    0.816   [ 0.350,  0.948]
+
+PAIRED: rho(T=16) - rho(T=1)
+  observed +0.1224   95% CI [-0.0122, +0.5143]
+  P(increase) = 0.9593   n_boot = 4000
+  includes zero -> not significant
