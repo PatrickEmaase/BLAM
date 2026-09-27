@@ -1,0 +1,27 @@
+10 models, M=8, N=10000 inputs, tolerance 5/n = 5.000e-04
+
+========================================================================
+A. POSITIVE CONTROL: apply a known invertible A; the pair IS ~_L
+========================================================================
+ seed   cond(A)        d_fg   < 5/n  alpha*_sym   max|D_a|
+    0     18.03   1.000e-04     yes         inf   8.81e-15
+    1   1588.69   1.000e-04     yes         inf   2.40e-12
+    2     54.36   1.000e-04     yes         inf   3.08e-14
+    3     34.99   1.000e-04     yes         inf   1.17e-14
+    4    155.94   1.000e-04     yes         inf   6.70e-14
+    5    122.47   1.000e-04     yes         inf   6.47e-14
+    6     11.06   1.000e-04     yes         inf   7.12e-15
+    7     14.30   1.000e-04     yes         inf   1.15e-14
+
+  d_fg < 5/n failures        : 0/8   (must be 0)
+  alpha*_sym != inf failures : 0/8   (must be 0)
+  D_alpha != 0 failures      : 0/8   (must be 0)
+
+========================================================================
+B. GRADED CONTROL (Thm 12) and THE CEILING (Cor 13) on trained pairs
+========================================================================
+  pairs tested                       : 45
+  Thm 12 violations                  : 0   (must be 0)
+  Cor 13 violations                  : 0   (must be 0)
+  Thm 12 slack  bound/d_fg           : median 1285.6x, min 878.09x
+  Cor 13 cap / measured alpha*_sym   : median 1285.6x, min 878.09x

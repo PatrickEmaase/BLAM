@@ -1,17 +1,17 @@
-loaded 60 models from runs/cifar
-pairs: 270   dropped: 0   (dropped must be 0 or explained)
+loaded 90 models from runs/cifar
+pairs: 705   dropped: 0   (dropped must be 0 or explained)
 
 ======================================================================
 C1  delta_m profile and tail localisation
 ======================================================================
 
- dim 2  (n=45 pairs)
+ dim 2  (n=435 pairs)
      m   median delta_m    1/delta_m
-     2        3.639e-09    2.748e+08
-     3        1.075e-15    9.305e+14
-     4        2.800e-35    3.571e+34
-     5        3.252e-51    3.075e+50
-    10       9.821e-127   1.018e+126
+     2        3.813e-09    2.623e+08
+     3        2.147e-14    4.657e+13
+     4        3.545e-37    2.821e+36
+     5        3.317e-53    3.015e+52
+    10       1.406e-141   7.112e+140
 
  dim 3  (n=45 pairs)
      m   median delta_m    1/delta_m
@@ -29,12 +29,20 @@ C1  delta_m profile and tail localisation
      5        7.031e-17    1.422e+16
     10        1.024e-30    9.766e+29
 
+ dim 8  (n=45 pairs)
+     m   median delta_m    1/delta_m
+     2        1.221e-11    8.187e+10
+     3        3.557e-14    2.812e+13
+     4        5.817e-15    1.719e+14
+     5        2.329e-15    4.294e+14
+    10        1.883e-23    5.311e+22
+
   top-k vs tail: KL and d_fg on restricted supports
      k   KL(top-k)    KL(tail)   frac of full KL
-     1      0.0000      0.6310             0.000   (dim 2)
-     2      0.1946      0.7761             0.441   (dim 2)
-     3      0.2809      0.9759             0.647   (dim 2)
-     5      0.3622      1.1184             0.886   (dim 2)
+     1      0.0000      0.7817             0.000   (dim 2)
+     2      0.2072      0.9396             0.434   (dim 2)
+     3      0.3077      1.1239             0.661   (dim 2)
+     5      0.4098      0.9739             0.883   (dim 2)
      1      0.0000      0.9861             0.000   (dim 3)
      2      0.2320      1.0809             0.597   (dim 3)
      3      0.3015      1.0956             0.784   (dim 3)
@@ -43,37 +51,43 @@ C1  delta_m profile and tail localisation
      2      0.2137      1.4123             0.668   (dim 5)
      3      0.2695      1.6239             0.843   (dim 5)
      5      0.3061      2.0894             0.953   (dim 5)
+     1      0.0000      0.7951             0.000   (dim 8)
+     2      0.2182      1.0732             0.689   (dim 8)
+     3      0.2795      1.1027             0.862   (dim 8)
+     5      0.3146      1.1747             0.963   (dim 8)
 
 ======================================================================
 C2  label smoothing: does raising delta_m restore KL?
 ======================================================================
  dim  smooth    n  median delta_3   mean KL  mean d_fg  spearman        p
-   2     0.0   45       1.075e-15    0.6010     0.1918     0.725   0.0000
+   2     0.0  435       2.147e-14    0.5539     0.1616     0.652   0.0000
    2    0.05   45       6.855e-03    0.3593     0.1531     0.640   0.0000
    2     0.1   45       3.114e-02    0.1464     0.0525     0.338   0.0232
    2     0.2   45       6.369e-02    0.1887     0.1432     0.911   0.0000
    3     0.0   45       2.440e-11    0.3763     0.1471     0.722   0.0000
    5     0.0   45       2.648e-14    0.3342     0.1049     0.143   0.3480
+   8     0.0   45       3.557e-14    0.3644     0.0961     0.080   0.6003
 
 ======================================================================
 C3  non-vacuity of Thm 12
 ======================================================================
  dim     n  violations  non-vacuous  median bound  median d_fg
-   2    45           0       57.8%         0.931        0.128
+   2   435           0       59.1%         0.895        0.113
    3    45           0       64.4%         0.764        0.065
    5    45           0       13.3%         1.226        0.103
+   8    45           0        0.0%         1.368        0.093
 
 ======================================================================
 C4  agreement across similarity measures
 ======================================================================
    measure   spearman with KL         p
-      d_fg              0.597    0.0000
-      mCCA             -0.363    0.0000
-       CKA             -0.463    0.0000
-Procrustes              0.392    0.0000
+      d_fg              0.623    0.0000
+      mCCA             -0.465    0.0000
+       CKA             -0.576    0.0000
+Procrustes              0.515    0.0000
 
 CI guards
-  argmax agreement: min 0.607, median 0.804
+  argmax agreement: min 0.607, median 0.760
   alpha*_sym finite on all pairs (expected: no pair is ~_L equivalent)
 
 wrote results/cifar/pairs.csv
